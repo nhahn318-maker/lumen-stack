@@ -1,17 +1,44 @@
-const express = require('express')
-const path = require('path')
-const opn = require('opn')
+const http = require('node:http')
+const fs = require('node:fs')
+const path = require('node:path')
 
-const server = express()
-const host = 'http://localhost:8082'
-server.use('/assets', express.static(path.resolve(__dirname, './assets')))
-server.use('/dist', express.static(path.resolve(__dirname, './dist')))
+const port = Number(process.env.PORT || 8082)
+const root = __dirname
+const contentTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.json': 'application/json; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8'
+}
 
-server.get('*', (req, res) => {
-  res.sendFile(path.resolve(__dirname, './index.html'));
+const server = http.createServer((request, response) => {
+  const pathname = decodeURIComponent(new URL(request.url, `http://${request.headers.host}`).pathname)
+  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '')
+  const filePath = path.resolve(root, relativePath)
+
+  if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
+    response.writeHead(403)
+    response.end('Forbidden')
+    return
+  }
+
+  fs.stat(filePath, (statError, stat) => {
+    if (statError || !stat.isFile()) {
+      response.writeHead(404)
+      response.end('Not found')
+      return
+    }
+    response.writeHead(200, {
+      'Content-Type': contentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Cache-Control': 'no-cache'
+    })
+    fs.createReadStream(filePath).pipe(response)
+  })
 })
 
-server.listen(8082, () => {
-  console.log(`server started at ${host}`)
-  opn(host)
+server.listen(port, '0.0.0.0', () => {
+  console.log(`Lumen Stack is ready at http://localhost:${port}`)
 })
